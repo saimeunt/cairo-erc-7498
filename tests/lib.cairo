@@ -1,3 +1,11 @@
 #[cfg(test)]
 #[feature("safe_dispatcher")]
-mod test_erc7498;
+mod erc721_redeemable_mintable;
+#[feature("safe_dispatcher")]
+mod erc1155_redeemable_mintable;
+#[feature("safe_dispatcher")]
+mod erc7498_get_and_update_campaign;
+mod erc7498_redemption_mintable;
+// mod erc7498_simple_redeem;
+mod erc7498;
+mod utils;
