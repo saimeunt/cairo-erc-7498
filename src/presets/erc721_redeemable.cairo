@@ -1,17 +1,28 @@
 use starknet::ContractAddress;
-use cairo_erc_7498::utils::consideration_structs::{OfferItem, ConsiderationItem};
-use cairo_erc_7498::erc7498::redeemables_structs::{TraitRedemption};
+use cairo_erc_7498::erc7498::redeemables_structs::Campaign;
 
 #[starknet::interface]
-pub trait IERC721RedemptionMintableMixin<TState> {
-    // IRedemptionMintable
-    fn mint_redemption(
+pub trait IERC721Redeemable<TState> {
+    fn mint(ref self: TState, to: ContractAddress, token_id: u256);
+    fn burn(ref self: TState, token_id: u256);
+    fn create_campaign(ref self: TState, campaign: Campaign, uri: ByteArray) -> u256;
+}
+
+#[starknet::interface]
+pub trait IERC721RedeemableMixin<TState> {
+    // IERC721Redeemable
+    fn mint(ref self: TState, to: ContractAddress, token_id: u256);
+    // IERC721Burnable
+    fn burn(ref self: TState, token_id: u256);
+    // IERC7498
+    fn get_campaign(self: @TState, campaign_id: u256) -> (Campaign, ByteArray, u256);
+    fn create_campaign(ref self: TState, campaign: Campaign, uri: ByteArray) -> u256;
+    fn update_campaign(ref self: TState, campaign_id: u256, campaign: Campaign, uri: ByteArray);
+    fn redeem(
         ref self: TState,
-        campaign_id: u256,
+        consideration_token_ids: Span<u256>,
         recipient: ContractAddress,
-        offer: OfferItem,
-        consideration: Span<ConsiderationItem>,
-        trait_redemptions: Span<TraitRedemption>
+        extra_data: Span<felt252>
     );
     // IERC721
     fn balance_of(self: @TState, account: ContractAddress) -> u256;
@@ -39,20 +50,19 @@ pub trait IERC721RedemptionMintableMixin<TState> {
 }
 
 #[starknet::contract]
-pub mod ERC721RedemptionMintable {
+pub mod ERC721Redeemable {
     use starknet::ContractAddress;
     use starknet::get_caller_address;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::access::ownable::ownable::OwnableComponent::InternalTrait;
     use openzeppelin::access::ownable::OwnableComponent;
-    use openzeppelin::token::erc721::ERC721Component;
-    use cairo_erc_7498::erc7498::interface::IRedemptionMintable;
-    use cairo_erc_7498::erc7498::redeemables_structs::{TraitRedemption};
-    use cairo_erc_7498::utils::consideration_structs::{OfferItem, ConsiderationItem};
+    use openzeppelin::token::erc721::{ERC721Component, ERC721HooksEmptyImpl};
+    use cairo_erc_7498::erc7498::erc7498::ERC7498Component;
+    use cairo_erc_7498::erc7498::redeemables_structs::Campaign;
 
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
     component!(path: ERC721Component, storage: erc721, event: ERC721Event);
+    component!(path: ERC7498Component, storage: erc7498, event: ERC7498Event);
 
     // Ownable
     #[abi(embed_v0)]
@@ -64,6 +74,11 @@ pub mod ERC721RedemptionMintable {
     impl ERC721MixinImpl = ERC721Component::ERC721MixinImpl<ContractState>;
     impl ERC721InternalImpl = ERC721Component::InternalImpl<ContractState>;
 
+    // ERC7498
+    #[abi(embed_v0)]
+    impl ERC7498Impl = ERC7498Component::ERC7498Impl<ContractState>;
+    impl ERC7498InternalImpl = ERC7498Component::InternalImpl<ContractState>;
+
     #[storage]
     struct Storage {
         #[substorage(v0)]
@@ -72,8 +87,8 @@ pub mod ERC721RedemptionMintable {
         ownable: OwnableComponent::Storage,
         #[substorage(v0)]
         erc721: ERC721Component::Storage,
-        /// @dev The next token id to mint.
-        next_token_id: u256,
+        #[substorage(v0)]
+        erc7498: ERC7498Component::Storage,
     }
 
     #[event]
@@ -85,37 +100,35 @@ pub mod ERC721RedemptionMintable {
         OwnableEvent: OwnableComponent::Event,
         #[flat]
         ERC721Event: ERC721Component::Event,
+        #[flat]
+        ERC7498Event: ERC7498Component::Event,
     }
 
     #[constructor]
     fn constructor(
-        ref self: ContractState,
-        name: ByteArray,
-        symbol: ByteArray,
-        base_uri: ByteArray,
-        owner: ContractAddress
+        ref self: ContractState, name: ByteArray, symbol: ByteArray, base_uri: ByteArray
     ) {
-        self.ownable.initializer(owner);
+        self.ownable.initializer(get_caller_address());
         self.erc721.initializer(name, symbol, base_uri);
-        self.next_token_id.write(1);
+        self.erc7498.initializer();
     }
 
     #[abi(embed_v0)]
-    impl ERC721RedemptionMintableImpl of IRedemptionMintable<ContractState> {
-        fn mint_redemption(
-            ref self: ContractState,
-            campaign_id: u256,
-            recipient: ContractAddress,
-            offer: OfferItem,
-            consideration: Span<ConsiderationItem>,
-            trait_redemptions: Span<TraitRedemption>
-        ) {
-            // Require that msg.sender is valid.
+    impl ERC721RedeemableImpl of super::IERC721Redeemable<ContractState> {
+        fn mint(ref self: ContractState, to: ContractAddress, token_id: u256) {
             self.ownable.assert_only_owner();
-            // Increment nextTokenId first so more of the same token id cannot be minted through reentrancy.
-            let next_token_id = self.next_token_id.read();
-            self.next_token_id.write(next_token_id + 1);
-            self.erc721._mint(recipient, next_token_id);
+            self.erc721._mint(to, token_id);
+        }
+
+        fn burn(ref self: ContractState, token_id: u256) {
+            let from = self.erc721._owner_of(token_id);
+            self.erc721._check_authorized(from, get_caller_address(), token_id);
+            self.erc721._burn(token_id);
+        }
+
+        fn create_campaign(ref self: ContractState, campaign: Campaign, uri: ByteArray) -> u256 {
+            self.ownable.assert_only_owner();
+            self.erc7498._create_campaign(@campaign, uri)
         }
     }
 }

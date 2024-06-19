@@ -1,11 +1,11 @@
 use starknet::ContractAddress;
-use cairo_erc_7498::erc7498::interface::CampaignParams;
+use cairo_erc_7498::erc7498::redeemables_structs::Campaign;
 
 #[starknet::interface]
 pub trait IERC721Redeemables<TState> {
     fn mint(ref self: TState, to: ContractAddress, token_id: u256);
     fn burn(ref self: TState, token_id: u256);
-    fn create_campaign(ref self: TState, params: CampaignParams, uri: ByteArray) -> u256;
+    fn create_campaign(ref self: TState, campaign: Campaign, uri: ByteArray) -> u256;
 }
 
 #[starknet::interface]
@@ -15,9 +15,9 @@ pub trait IERC721RedeemablesMixin<TState> {
     // IERC721Burnable
     fn burn(ref self: TState, token_id: u256);
     // IERC7498
-    fn get_campaign(self: @TState, campaign_id: u256) -> (CampaignParams, ByteArray, u256);
-    fn create_campaign(ref self: TState, params: CampaignParams, uri: ByteArray) -> u256;
-    fn update_campaign(ref self: TState, campaign_id: u256, params: CampaignParams, uri: ByteArray);
+    fn get_campaign(self: @TState, campaign_id: u256) -> (Campaign, ByteArray, u256);
+    fn create_campaign(ref self: TState, campaign: Campaign, uri: ByteArray) -> u256;
+    fn update_campaign(ref self: TState, campaign_id: u256, campaign: Campaign, uri: ByteArray);
     fn redeem(
         ref self: TState,
         consideration_token_ids: Span<u256>,
@@ -57,7 +57,7 @@ pub mod ERC721Redeemables {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc721::ERC721Component;
     use cairo_erc_7498::erc7498::erc7498::ERC7498Component;
-    use cairo_erc_7498::erc7498::interface::CampaignParams;
+    use cairo_erc_7498::erc7498::redeemables_structs::Campaign;
 
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -128,11 +128,9 @@ pub mod ERC721Redeemables {
             self.erc721._burn(token_id);
         }
 
-        fn create_campaign(
-            ref self: ContractState, params: CampaignParams, uri: ByteArray
-        ) -> u256 {
+        fn create_campaign(ref self: ContractState, campaign: Campaign, uri: ByteArray) -> u256 {
             self.ownable.assert_only_owner();
-            self.erc7498._create_campaign(@params, uri)
+            self.erc7498._create_campaign(@campaign, uri)
         }
     }
 }

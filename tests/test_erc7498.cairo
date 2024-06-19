@@ -1,5 +1,4 @@
 use core::panic_with_felt252;
-use core::traits::TryInto;
 use starknet::ContractAddress;
 use starknet::contract_address_const;
 use starknet::get_block_timestamp;
@@ -8,10 +7,12 @@ use snforge_std::{
 };
 use openzeppelin::utils::serde::SerializedAppend;
 use openzeppelin::token::erc721::ERC721Component;
-use cairo_erc_7498::erc7498::interface::{
-    IERC7498_ID, BURN_ADDRESS, ItemType, OfferItem, ConsiderationItem, CampaignRequirements,
-    CampaignParams,
-};
+use cairo_erc_7498::utils::consideration_enums::ItemType;
+use cairo_erc_7498::utils::consideration_structs::{OfferItem, ConsiderationItem};
+use cairo_erc_7498::erc7498::redeemables_constants::BURN_ADDRESS;
+use cairo_erc_7498::erc7498::redeemables_errors::Errors;
+use cairo_erc_7498::erc7498::redeemables_structs::{Campaign, CampaignParams, CampaignRequirements};
+use cairo_erc_7498::erc7498::interface::IERC7498_ID;
 use cairo_erc_7498::erc7498::erc7498::ERC7498Component;
 use cairo_erc_7498::presets::erc721_redeemables::{
     ERC721Redeemables, IERC721RedeemablesMixinDispatcherTrait, IERC721RedeemablesMixinDispatcher,
@@ -118,7 +119,6 @@ fn supports_interface() {
         setup();
     assert!(redeem_token.supports_interface(IERC7498_ID));
 }
-
 #[test]
 fn test_burn_internal_token() {
     let (
@@ -158,40 +158,27 @@ fn test_burn_internal_token() {
     ];
 
     let requirements = array![
-        CampaignRequirements { offer: offer.span(), consideration: consideration.span() }
+        CampaignRequirements {
+            offer: offer.span(),
+            consideration: consideration.span(),
+            trait_redemptions: array![].span()
+        }
     ];
 
     let timestamp: u32 = get_block_timestamp().try_into().unwrap();
-    let params = CampaignParams {
+    let campaign = Campaign {
+        params: CampaignParams {
+            signer: ZERO(),
+            start_time: timestamp,
+            end_time: timestamp + 1000,
+            max_campaign_redemptions: 5,
+            manager: test_address()
+        },
         requirements: requirements.span(),
-        signer: ZERO(),
-        start_time: timestamp,
-        end_time: timestamp + 1000,
-        max_campaign_redemptions: 5,
-        manager: test_address()
     };
 
-    redeem_token.create_campaign(params, CAMPAIGN_URI());
+    redeem_token.create_campaign(campaign, CAMPAIGN_URI());
 
-    // let offer_from_event = array![OfferItem {
-    //     item_type: ItemType::ERC721,
-    //     token: receive_contract_address,
-    //     identifier_or_criteria: 0,
-    //     start_amount: 1,
-    //     end_amount: 1
-    // }];
-    // let consideration_from_event = array![ConsiderationItem {
-    //     item_type: ItemType::ERC721,
-    //     token: redeem_contract_address,
-    //     identifier_or_criteria: 0,
-    //     start_amount: 1,
-    //     end_amount: 1,
-    //     recipient: contract_address_const::<BURN_ADDRESS>()
-    // }];
-
-    // campaignId: 1
-    // requirementsIndex: 0
-    // redemptionHash: bytes32(0)
     let extra_data = array![1, 0, 0];
     let consideration_token_ids = array![TOKEN_ID];
     let trait_redemption_token_ids = array![];
@@ -265,20 +252,26 @@ fn test_revert_721_consideration_item_insufficient_balance() {
     ];
 
     let requirements = array![
-        CampaignRequirements { offer: offer.span(), consideration: consideration.span() }
+        CampaignRequirements {
+            offer: offer.span(),
+            consideration: consideration.span(),
+            trait_redemptions: array![].span()
+        }
     ];
 
     let timestamp: u32 = get_block_timestamp().try_into().unwrap();
-    let params = CampaignParams {
+    let campaign = Campaign {
+        params: CampaignParams {
+            signer: ZERO(),
+            start_time: timestamp,
+            end_time: timestamp + 1000,
+            max_campaign_redemptions: 5,
+            manager: test_address()
+        },
         requirements: requirements.span(),
-        signer: ZERO(),
-        start_time: timestamp,
-        end_time: timestamp + 1000,
-        max_campaign_redemptions: 5,
-        manager: test_address()
     };
 
-    redeem_token.create_campaign(params, CAMPAIGN_URI());
+    redeem_token.create_campaign(campaign, CAMPAIGN_URI());
 
     let extra_data = array![1, 0, 0];
     let consideration_token_ids = array![INVALID_TOKEN_ID];
@@ -286,9 +279,7 @@ fn test_revert_721_consideration_item_insufficient_balance() {
         .redeem(consideration_token_ids.span(), test_address(), extra_data.span()) {
         Result::Ok(_) => panic_with_felt252('FAIL'),
         Result::Err(panic_data) => {
-            assert_eq!(
-                *panic_data.at(0), ERC7498Component::Errors::CONSIDERATION_ITEM_INSUFFICIENT_BALANCE
-            );
+            assert_eq!(*panic_data.at(0), Errors::CONSIDERATION_ITEM_INSUFFICIENT_BALANCE);
         }
     }
 
@@ -348,20 +339,26 @@ fn test_revert_consideration_length_not_met() {
     ];
 
     let requirements = array![
-        CampaignRequirements { offer: offer.span(), consideration: consideration.span() }
+        CampaignRequirements {
+            offer: offer.span(),
+            consideration: consideration.span(),
+            trait_redemptions: array![].span()
+        }
     ];
 
     let timestamp: u32 = get_block_timestamp().try_into().unwrap();
-    let params = CampaignParams {
+    let campaign = Campaign {
+        params: CampaignParams {
+            signer: ZERO(),
+            start_time: timestamp,
+            end_time: timestamp + 1000,
+            max_campaign_redemptions: 5,
+            manager: test_address()
+        },
         requirements: requirements.span(),
-        signer: ZERO(),
-        start_time: timestamp,
-        end_time: timestamp + 1000,
-        max_campaign_redemptions: 5,
-        manager: test_address()
     };
 
-    redeem_token.create_campaign(params, CAMPAIGN_URI());
+    redeem_token.create_campaign(campaign, CAMPAIGN_URI());
 
     let extra_data = array![1, 0, 0];
     let consideration_token_ids = array![TOKEN_ID];
@@ -369,10 +366,7 @@ fn test_revert_consideration_length_not_met() {
         .redeem(consideration_token_ids.span(), test_address(), extra_data.span()) {
         Result::Ok(_) => panic_with_felt252('FAIL'),
         Result::Err(panic_data) => {
-            assert_eq!(
-                *panic_data.at(0),
-                ERC7498Component::Errors::TOKEN_IDS_DONT_MATCH_CONSIDERATION_LENGTH
-            );
+            assert_eq!(*panic_data.at(0), Errors::TOKEN_IDS_DONT_MATCH_CONSIDERATION_LENGTH);
         }
     }
 
@@ -435,20 +429,26 @@ fn test_burn_with_second_consideration_item() {
     ];
 
     let requirements = array![
-        CampaignRequirements { offer: offer.span(), consideration: consideration.span() }
+        CampaignRequirements {
+            offer: offer.span(),
+            consideration: consideration.span(),
+            trait_redemptions: array![].span()
+        }
     ];
 
     let timestamp: u32 = get_block_timestamp().try_into().unwrap();
-    let params = CampaignParams {
+    let campaign = Campaign {
+        params: CampaignParams {
+            signer: ZERO(),
+            start_time: timestamp,
+            end_time: timestamp + 1000,
+            max_campaign_redemptions: 5,
+            manager: test_address()
+        },
         requirements: requirements.span(),
-        signer: ZERO(),
-        start_time: timestamp,
-        end_time: timestamp + 1000,
-        max_campaign_redemptions: 5,
-        manager: test_address()
     };
 
-    redeem_token.create_campaign(params, CAMPAIGN_URI());
+    redeem_token.create_campaign(campaign, CAMPAIGN_URI());
 
     let extra_data = array![1, 0, 0];
     let consideration_token_ids = array![TOKEN_ID, TOKEN_ID];
@@ -523,23 +523,31 @@ fn test_burn_with_second_requirements_index() {
     ];
 
     let requirements = array![
-        CampaignRequirements { offer: offer.span(), consideration: consideration.span() },
         CampaignRequirements {
-            offer: offer.span(), consideration: second_requirements_consideration.span()
+            offer: offer.span(),
+            consideration: consideration.span(),
+            trait_redemptions: array![].span()
+        },
+        CampaignRequirements {
+            offer: offer.span(),
+            consideration: second_requirements_consideration.span(),
+            trait_redemptions: array![].span()
         }
     ];
 
     let timestamp: u32 = get_block_timestamp().try_into().unwrap();
-    let params = CampaignParams {
+    let campaign = Campaign {
+        params: CampaignParams {
+            signer: ZERO(),
+            start_time: timestamp,
+            end_time: timestamp + 1000,
+            max_campaign_redemptions: 5,
+            manager: test_address()
+        },
         requirements: requirements.span(),
-        signer: ZERO(),
-        start_time: timestamp,
-        end_time: timestamp + 1000,
-        max_campaign_redemptions: 5,
-        manager: test_address()
     };
 
-    redeem_token.create_campaign(params, CAMPAIGN_URI());
+    redeem_token.create_campaign(campaign, CAMPAIGN_URI());
 
     let extra_data = array![1, 1, 0];
     let consideration_token_ids = array![TOKEN_ID];
@@ -556,3 +564,4 @@ fn test_burn_with_second_requirements_index() {
 
     assert_eq!(receive_token.owner_of(1), test_address());
 }
+
