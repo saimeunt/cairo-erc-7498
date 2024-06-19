@@ -1,8 +1,6 @@
 use starknet::ContractAddress;
 use starknet::get_block_timestamp;
-use snforge_std::{
-    declare, ContractClassTrait, test_address, cheat_block_timestamp_global
-};
+use snforge_std::{declare, ContractClassTrait, test_address, cheat_block_timestamp_global};
 use openzeppelin::utils::serde::SerializedAppend;
 use openzeppelin::tests::utils::constants::{NAME, SYMBOL, BASE_URI, ZERO};
 use openzeppelin::introspection::interface::{ISRC5Dispatcher, ISRC5DispatcherTrait};
